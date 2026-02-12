@@ -3,12 +3,12 @@ import math
 
 # --- KNOWLEDGE BASE: INDUSTRIAL CHEMISTRY ---
 FATLIQUOR_SPECS = {
-    "Sulphated Fish Oil": {"stability": 2, "pen": 0.4, "desc": "High snap; surface bound. High VBI risk."},
+    "Sulphated Fish Oil": {"stability": 2, "pen": 0.4, "desc": "High snap; surface bound. High risk of emulsion crash."},
     "Sulphited Fish Oil": {"stability": 8, "pen": 0.9, "desc": "Deep penetration; salt stable. Core filling."},
     "Sulphated Vegetable Oil": {"stability": 3, "pen": 0.5, "desc": "Medium softness; grain-focused filling."},
     "Synthetic Waterproofing Oil": {"stability": 6, "pen": 0.7, "desc": "Polymer-based; reactive barrier logic."},
     "Phosphoric Ester": {"stability": 9, "pen": 0.8, "desc": "Superior electrolyte stability; core-filling."},
-    "Raw/Neutral Oil (Neatsfoot)": {"stability": 1, "pen": 0.2, "desc": "Requires massive NSA/Soup for movement."}
+    "Raw/Neutral Oil (Neatsfoot)": {"stability": 1, "pen": 0.2, "desc": "Requires massive surfactant (NSA) for movement."}
 }
 
 class PlatinumIndustrialTwin:
@@ -23,13 +23,11 @@ class PlatinumIndustrialTwin:
         spec = FATLIQUOR_SPECS[fat_name]
         
         # 1. MECHANICAL WORK (Kinetic Oomph)
-        # Peripheral Speed (v = pi * D * RPM / 60)
         v_peripheral = (math.pi * diameter * rpm) / 60
-        # Drop Energy: Potential Energy (mgh) where h is approx 75% of diameter
         drop_energy = (weight * 9.81 * (diameter * 0.75)) / 1000 # kJ
         kinetic_oomph = v_peripheral * drop_energy
         
-        # 2. ANIONIC SOUP & ELECTRICAL DRAG (Covington's Link-Lock)
+        # 2. ELECTRICAL DRAG (Covington's Link-Lock)
         veg_map = {"None": 0, "Tara": 25, "Mimosa": -6, "Chestnut": -12}
         veg_power = veg_map.get(veg, 0)
         # Zeta Potential: High value = 'Sticky' surface for anionic reagents
@@ -38,27 +36,25 @@ class PlatinumIndustrialTwin:
         eff_zeta = base_charge - soup_masking
         
         # 3. THERMAL MOBILITY & SNAP RISK
-        # Higher temp improves oil mobility, but the 'Shock' depends on the Jump
         oil_mobility = 1.0 + ((temp_fat - 35) / 55.0)
         temp_jump = temp_fat - temp_retan
-        # Snap risk increases exponentially with pH and Temperature differential
         snap_risk = 1.0 + (max(0, self.ph - 5.1) * temp_jump * 0.05)
         
         # 4. PENETRATION (Fick's Second Law + Mechanics)
         diffusion_path = self.thick ** 2 
-        wall_res = 1.45 if pickle == "Chaser" else 0.85 # The Chaser Pickle 'Mineral Wall'
+        wall_res = 1.45 if pickle == "Chaser" else 0.85 
         
         pen_res = (max(0, eff_zeta) * 0.01 * diffusion_path * wall_res * snap_risk)
         pen_score = 100 / (1 + (pen_res / (oil_mobility * kinetic_oomph + 0.1)))
         
-        # 5. VAPOR BARRIER INDEX (VBI - Clagginess)
+        # 5. SURFACE LOADING (VBI - Vapor Barrier Index)
         vbi = 1.0
         if self.ph > 5.3 and spec['stability'] < 4: 
-            vbi *= 2.1 # The 'Greasy Rubbish' Trigger
+            vbi *= 2.1 # The 'Emulsion Crash' Trigger
         if self.free_cr > 1.0: 
-            vbi *= (1.2 + (self.free_cr * 0.06)) # Zhang's Free Cations
+            vbi *= (1.2 + (self.free_cr * 0.06)) 
         if is_wp: 
-            vbi *= 1.35 # Waterproofing Polymer Barrier
+            vbi *= 1.35 
         
         # 6. GLOBAL DRYING THERMODYNAMICS
         climate_res = 1.0 if climate == "Temperate" else 2.7
@@ -66,7 +62,6 @@ class PlatinumIndustrialTwin:
             complexity = (self.thick**2) * vbi * climate_res
             method_desc = "Natural capillary evaporation. High sensitivity to ambient humidity."
         else: # Partial Vacuum
-            # Heat plate irons oil into grain if fixation is weak (High pH)
             vbi_adj = vbi * 1.35 if self.ph > 5.4 else vbi * 0.75
             complexity = (self.thick**1.6) * vbi_adj * (climate_res * 0.55)
             method_desc = "Mechanical moisture extraction. Risk of 'Blinded Grain' at high pH."
@@ -90,7 +85,7 @@ class PlatinumIndustrialTwin:
 # --- STREAMLIT UI ---
 st.set_page_config(page_title="Platinum Master Twin v8.5", layout="wide")
 st.title("🛡️ Platinum Wet-End Digital Twin (v8.5)")
-st.markdown("### The 'Knife-Edge' Process Model: Chemistry, Mechanics & Climate")
+st.markdown("### Process Predictor: Chemistry, Mechanics & Climate")
 
 with st.sidebar:
     st.header("🏗️ 1. Drum Engineering")
@@ -123,45 +118,45 @@ with st.sidebar:
 twin = PlatinumIndustrialTwin(thick, cr, ph)
 res = twin.simulate(fat_choice, syn, nsa, veg, pickle, dry_method, climate, rpm, diameter, weight, temp_retan, temp_fat, is_wp)
 
-# DASHBOARD WITH TOOLTIPS
+# DASHBOARD WITH INDUSTRY TOOLTIPS
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Kinetic Oomph (kJ)", res['Oomph'], help="Total mechanical work delivered to the fiber matrix.")
-c2.metric("Oil Penetration", f"{res['Pen']}%", help="Estimated saturation of the core center.")
-c3.metric("Clagginess (VBI)", res['VBI'], help="Vapor Barrier Index: >1.8 indicates surface oil sealing.")
-c4.metric("Drying Complexity", res['Complexity'], help="Energy required to dry based on VBI and Climate.")
+c1.metric("Kinetic Oomph (kJ)", res['Oomph'], help="Total mechanical work delivered. Higher oomph helps drive oil to the core.")
+c2.metric("Core Penetration", f"{res['Pen']}%", help="Estimated saturation of the core center.")
+c3.metric("Surface Loading (VBI)", res['VBI'], help="Vapor Barrier Index: >1.8 indicates an emulsion crash at the grain.")
+c4.metric("Drying Complexity", res['Complexity'], help="Energy required to drive moisture past surface-loaded oil.")
 
 st.divider()
 
 col_l, col_r = st.columns(2)
 with col_l:
-    st.subheader("🥁 Drum & Structural Analysis")
+    st.subheader("🥁 Emulsion Stability Analysis")
     st.info(f"**Oil Profile:** {res['Oil_Note']}")
     
     if res['Pen'] < 45:
-        st.error(f"🚨 **CORE STARVATION:** The Chrome Castle is blocking the center of the {thick}mm cross-section.")
+        st.error(f"🚨 **EMULSION CRASH:** Chemistry has crashed out on the surface. The center of the {thick}mm substance is starving for oil.")
     elif res['Pen'] > 90:
-        st.success(f"✨ **Full Saturation:** Clean penetration across {thick}mm.")
+        st.success(f"✨ **Full Penetration (ø):** Emulsion remained stable to the core across {thick}mm.")
     else:
-        st.warning(f"⚖️ **Saturation Warning:** Incomplete core penetration for {thick}mm substance.")
+        st.warning(f"⚖️ **Sluggish Penetration:** Risk of 'unlevel' lubrication through the cross-section.")
     
-    st.write(f"**Effective Zeta:** {res['Zeta']} mV (Electrical Drag)")
+    st.write(f"**Electrical Drag (Zeta):** {res['Zeta']} mV")
     st.write(f"**Peripheral Velocity:** {res['Velocity']} m/s")
     
 
 with col_r:
-    st.subheader("🌡️ Thermodynamic Analysis")
+    st.subheader("🌡️ Fixation & Break Analysis")
     st.metric("Predicted Area Yield", f"{res['Yield']}%")
-    st.write(f"**Fixation Profile:** {res['Fixation_Desc']}")
+    st.write(f"**Drying Profile:** {res['Fixation_Desc']}")
     
     if res['Snap'] > 1.6:
-        st.error(f"🔥 **High Snap Risk ({res['Snap']}):** Temperature jump/pH is locking oil to the grain.")
+        st.error(f"⚠️ **COARSE BREAK RISK:** High 'Snap' ({res['Snap']}). Emulsion is locking to the grain too fast, risking grain distension.")
     
     if res['Complexity'] > 35 and climate == "Tropical":
-        st.error("🚨 **STALL RISK:** High humidity + high VBI = stagnant drying.")
+        st.error("🚨 **DRYING STALL:** High humidity + crashed surface oil = stagnant evaporation.")
     elif dry_method == "Partial Vacuum" and ph > 5.4:
-        st.warning("⚠️ **Blinded Grain:** Vacuum heat is ironing unfixed oil into pores.")
+        st.warning("⚠️ **BLINDED GRAIN:** Heat is ironing un-fixed oil into the pores.")
     else:
-        st.success("💨 **Efficient Path:** Pores are open; moisture transmission is optimal.")
+        st.success("💨 **Open Path:** Fixation is internal; moisture transmission is optimal.")
     
 
-st.caption(f"v8.5 Platinum Build | Target Substance: {thick}mm | Models: Covington (Link-Lock) & Zhang (Synchrotron)")
+st.caption(f"v8.5 Platinum Build | IULTCS Technical Toolkit | Models: Covington (Link-Lock) & Zhang (Saturation)")
