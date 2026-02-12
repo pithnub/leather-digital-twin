@@ -3,12 +3,12 @@ import math
 
 # --- KNOWLEDGE BASE: INDUSTRIAL CHEMISTRY ---
 FATLIQUOR_SPECS = {
-    "Sulphated Fish Oil": {"stability": 2, "pen": 0.4, "desc": "Rapid fixation; surface focused. High risk of emulsion crash."},
-    "Sulphited Fish Oil": {"stability": 8, "pen": 0.9, "desc": "Deep penetration; salt stable. Optimal core filling."},
-    "Sulphated Vegetable Oil": {"stability": 3, "pen": 0.5, "desc": "Moderate fixation; grain-focused lubrication."},
-    "Synthetic Waterproofing Oil": {"stability": 6, "pen": 0.7, "desc": "Polymer-based; reactive barrier logic."},
-    "Phosphoric Ester": {"stability": 9, "pen": 0.8, "desc": "Superior electrolyte stability; stays mobile to the core."},
-    "Raw/Neutral Oil (Neatsfoot)": {"stability": 1, "pen": 0.2, "desc": "Requires significant surfactant (NSA) to prevent surface crashing."}
+    "Sulphated Fish Oil": {"stability": 2, "pen": 0.4, "desc": "Typically rapid fixation and surface focused."},
+    "Sulphited Fish Oil": {"stability": 8, "pen": 0.9, "desc": "Inherently salt stable with deep penetration."},
+    "Sulphated Vegetable Oil": {"stability": 3, "pen": 0.5, "desc": "Standard grain-focused lubrication property."},
+    "Synthetic Waterproofing Oil": {"stability": 6, "pen": 0.7, "desc": "Polymer-based with reactive barrier logic."},
+    "Phosphoric Ester": {"stability": 9, "pen": 0.8, "desc": "Superior electrolyte stability; stays mobile easily."},
+    "Raw/Neutral Oil (Neatsfoot)": {"stability": 1, "pen": 0.2, "desc": "High crash risk without significant NSA/Surfactants."}
 }
 
 class PlatinumIndustrialTwin:
@@ -36,7 +36,6 @@ class PlatinumIndustrialTwin:
         # 3. THERMAL MOBILITY & FIXATION RATE
         oil_mobility = 1.0 + ((temp_fat - 35) / 55.0)
         temp_jump = temp_fat - temp_retan
-        # Rapid Fixation risk increases with pH and Temperature differential
         fixation_rate = 1.0 + (max(0, self.ph - 5.1) * temp_jump * 0.05)
         
         # 4. PENETRATION (Fick's Second Law + Mechanics)
@@ -48,14 +47,11 @@ class PlatinumIndustrialTwin:
         
         # 5. VAPOR BARRIER INDEX (VBI - Surface Loading)
         vbi = 1.0
-        if self.ph > 5.3 and spec['stability'] < 4: 
-            vbi *= 2.1 
-        if self.free_cr > 1.0: 
-            vbi *= (1.2 + (self.free_cr * 0.06)) 
-        if is_wp: 
-            vbi *= 1.35 
+        if self.ph > 5.3 and spec['stability'] < 4: vbi *= 2.1 
+        if self.free_cr > 1.0: vbi *= (1.2 + (self.free_cr * 0.06)) 
+        if is_wp: vbi *= 1.35 
         
-        # 6. GLOBAL DRYING THERMODYNAMICS
+        # 6. DRYING THERMODYNAMICS
         climate_res = 1.0 if climate == "Temperate" else 2.7
         if dry_method == "Air Drying":
             complexity = (self.thick**2) * vbi * climate_res
@@ -81,9 +77,9 @@ class PlatinumIndustrialTwin:
         }
 
 # --- STREAMLIT UI ---
-st.set_page_config(page_title="Platinum Master Twin v8.6", layout="wide")
-st.title("🛡️ Platinum Wet-End Digital Twin (v8.6)")
-st.markdown("### Process Predictor: Chemistry, Mechanics & Climate")
+st.set_page_config(page_title="Platinum Master Twin v8.7", layout="wide")
+st.title("🛡️ Platinum Wet-End Digital Twin (v8.7)")
+st.markdown("### The Predictor: Overcoming Chemical Fixation with Drum Mechanics")
 
 with st.sidebar:
     st.header("🏗️ 1. Drum Engineering")
@@ -118,28 +114,28 @@ res = twin.simulate(fat_choice, syn, nsa, veg, pickle, dry_method, climate, rpm,
 
 # DASHBOARD
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Kinetic Oomph (kJ)", res['Oomph'], help="Total mechanical energy helping oil penetrate the substrate.")
+c1.metric("Kinetic Oomph (kJ)", res['Oomph'], help="Total mechanical energy delivered to the load.")
 c2.metric("Core Penetration", f"{res['Pen']}%", help="Calculated saturation of the core center.")
-c3.metric("Surface Loading (VBI)", res['VBI'], help="Vapor Barrier Index: >1.8 indicates an emulsion crash on the grain.")
-c4.metric("Drying Complexity", res['Complexity'], help="Energy required to drive moisture past surface-fixed oil.")
+c3.metric("Surface Loading (VBI)", res['VBI'], help="Vapor Barrier Index: >1.8 indicates an emulsion crash.")
+c4.metric("Drying Complexity", res['Complexity'], help="Energy required to dry based on surface oil and climate.")
 
 st.divider()
 
 col_l, col_r = st.columns(2)
 with col_l:
     st.subheader("🥁 Emulsion Stability Analysis")
-    st.info(f"**Oil Profile:** {res['Oil_Note']}")
     
-    if res['Pen'] < 45:
-        st.error(f"🚨 **EMULSION CRASH:** Chemistry has fixed too rapidly on the surface. The center of the {thick}mm substance is starving for oil.")
-    elif res['Pen'] > 90:
-        st.success(f"✨ **Full Penetration (ø):** Emulsion remained stable through the {thick}mm cross-section.")
+    # DYNAMIC LOGIC: MATCHING THEORY TO RESULT
+    if res['Pen'] > 90:
+        st.success(f"✨ **Full Penetration (ø):** Process parameters successfully drove the {fat_choice} through the {thick}mm substance.")
+    elif res['Pen'] < 45:
+        st.error(f"🚨 **EMULSION CRASH:** Chemistry fixed too rapidly. The center of the {thick}mm substance is starving for lubricant.")
     else:
-        st.warning(f"⚖️ **Saturation Warning:** Incomplete migration for {thick}mm substance.")
-    
+        st.warning(f"⚖️ **Saturation Warning:** Incomplete migration. The oil has stalled before reaching the center.")
+
+    st.info(f"**Chemical Property:** {res['Oil_Note']}")
     st.write(f"**Electrical Drag (Zeta):** {res['Zeta']} mV")
     st.write(f"**Peripheral Velocity:** {res['Velocity']} m/s")
-    
 
 with col_r:
     st.subheader("🌡️ Fixation & Break Analysis")
@@ -147,7 +143,7 @@ with col_r:
     st.write(f"**Drying Profile:** {res['Fixation_Desc']}")
     
     if res['Fixation'] > 1.6:
-        st.error(f"⚠️ **RAPID FIXATION RISK:** Fixation rate ({res['Fixation']}) is too aggressive. Potential for coarse break due to surface-bound oil.")
+        st.error(f"⚠️ **RAPID FIXATION RISK:** Fixation rate ({res['Fixation']}) is too aggressive. High risk of grain distension (Coarse Break).")
     
     if res['Complexity'] > 35 and climate == "Tropical":
         st.error("🚨 **DRYING STALL:** High humidity + surface loading = stagnant evaporation.")
@@ -155,6 +151,5 @@ with col_r:
         st.warning("⚠️ **BLINDED GRAIN:** Vacuum heat is ironing un-fixed oil into the pores.")
     else:
         st.success("💨 **Open Path:** Fixation is internal; moisture transmission is optimal.")
-    
 
-st.caption(f"v8.6 Platinum Build | IULTCS Technical Toolkit | Models: Covington (Link-Lock) & Zhang (Saturation)")
+st.caption(f"v8.7 Platinum Build | IULTCS Technical Toolkit | Models: Covington (Link-Lock) & Zhang (Saturation)")
