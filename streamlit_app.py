@@ -18,8 +18,13 @@ class PlatinumIndustrialTwin:
         self.cr_sat = min(1.0, cr_offer / 3.0)
         self.free_cr = max(0, cr_offer - 3.0)
 
-    def simulate(self, fat_name, syn, nsa, veg, pickle, dry_method, climate, rpm, diameter, weight, temp_retan, temp_fat, is_wp):
-        spec = FATLIQUOR_SPECS[fat_name]
+    def simulate(self, o1, off1, o2, off2, o3, off3, syn, nsa, veg, pickle, dry_method, climate, rpm, diameter, weight, temp_retan, temp_fat, is_wp):
+        total_offer = off1 + off2 + off3
+        if total_offer == 0: return None
+        
+        # Weighted Mixture Calculations based on absolute mass offers (w/w)
+        mix_stability = ((FATLIQUOR_SPECS[o1]['stability'] * off1) + (FATLIQUOR_SPECS[o2]['stability'] * off2) + (FATLIQUOR_SPECS[o3]['stability'] * off3)) / total_offer
+        mix_pen_base = ((FATLIQUOR_SPECS[o1]['pen'] * off1) + (FATLIQUOR_SPECS[o2]['pen'] * off2) + (FATLIQUOR_SPECS[o3]['pen'] * off3)) / total_offer
         
         # 1. MECHANICAL WORK (Kinetic Oomph)
         v_peripheral = (math.pi * diameter * rpm) / 60
@@ -28,30 +33,32 @@ class PlatinumIndustrialTwin:
         
         # 2. ELECTRICAL DRAG (Covington's Link-Lock)
         veg_map = {"None": 0, "Tara": 25, "Mimosa": -6, "Chestnut": -12}
-        veg_power = veg_map.get(veg, 0)
         base_charge = (self.cr_sat * 100) + ((7.0 - self.ph) * 15)
-        soup_masking = (syn * 10) + (nsa * 28) + veg_power
+        soup_masking = (syn * 10) + (nsa * 28) + veg_map.get(veg, 0)
         eff_zeta = base_charge - soup_masking
         
-        # 3. THERMAL MOBILITY & FIXATION RATE
+        # 3. THERMAL MOBILITY & FIXATION RATE 
         oil_mobility = 1.0 + ((temp_fat - 35) / 55.0)
         temp_jump = temp_fat - temp_retan
-        fixation_rate = 1.0 + (max(0, self.ph - 5.1) * temp_jump * 0.05)
+        # Stability and mass volume both influence the fixation speed
+        fixation_rate = 1.0 + (max(0, self.ph - 5.1) * temp_jump * (0.1 / (mix_stability * 0.5)) * (1 + total_offer/15))
         
         # 4. PENETRATION (Fick's Second Law + Mechanics)
         diffusion_path = self.thick ** 2 
         wall_res = 1.45 if pickle == "Chaser" else 0.85 
-        
         pen_res = (max(0, eff_zeta) * 0.01 * diffusion_path * wall_res * fixation_rate)
-        pen_score = 100 / (1 + (pen_res / (oil_mobility * kinetic_oomph + 0.1)))
+        pen_score = 100 / (1 + (pen_res / (oil_mobility * mix_pen_base * kinetic_oomph + 0.1)))
         
-        # 5. VAPOR BARRIER INDEX (VBI - Surface Loading)
-        vbi = 1.0
-        if self.ph > 5.3 and spec['stability'] < 4: vbi *= 2.1 
+        # 5. BREAK PREDICTION (Sample Correlation A/B/C)
+        break_val = max(1.0, min(5.0, 5 - (pen_score / 25) + (fixation_rate * 0.3)))
+        
+        # 6. VAPOR BARRIER INDEX (VBI - Surface Loading)
+        vbi = 1.0 + (total_offer / 12)
+        if self.ph > 5.3 and mix_stability < 4: vbi *= 1.8 
         if self.free_cr > 1.0: vbi *= (1.2 + (self.free_cr * 0.06)) 
         if is_wp: vbi *= 1.35 
         
-        # 6. DRYING THERMODYNAMICS
+        # 7. DRYING THERMODYNAMICS
         climate_res = 1.0 if climate == "Temperate" else 2.7
         if dry_method == "Air Drying":
             complexity = (self.thick**2) * vbi * climate_res
@@ -72,84 +79,84 @@ class PlatinumIndustrialTwin:
             "Fixation": round(fixation_rate, 2),
             "Oomph": round(kinetic_oomph, 2),
             "Velocity": round(v_peripheral, 2),
-            "Oil_Note": spec['desc'],
-            "Fixation_Desc": method_desc
+            "Break": round(break_val, 1),
+            "Fix_Desc": method_desc,
+            "Oil_Note": FATLIQUOR_SPECS[o1]['desc']
         }
 
 # --- STREAMLIT UI ---
-st.set_page_config(page_title="Platinum Master Twin v8.7", layout="wide")
-st.title("🛡️ Platinum Wet-End Digital Twin (v8.7)")
-st.markdown("### The Predictor: Overcoming Chemical Fixation with Drum Mechanics")
+st.set_page_config(page_title="Platinum Master Twin v9.5", layout="wide")
+st.title("🛡️ Platinum Wet-End Digital Twin (v9.5)")
+st.markdown("### Production Build: Absolute Mass Offer & Thermodynamics")
 
 with st.sidebar:
-    st.header("🏗️ 1. Drum Engineering")
+    st.header("📋 1. Recipe Offers ($w/w$ %)")
+    o1 = st.selectbox("Oil A", list(FATLIQUOR_SPECS.keys()), index=1)
+    off1 = st.number_input("% Offer (A)", 0.0, 10.0, 3.0)
+    o2 = st.selectbox("Oil B", list(FATLIQUOR_SPECS.keys()), index=0)
+    off2 = st.number_input("% Offer (B)", 0.0, 10.0, 4.0)
+    o3 = st.selectbox("Oil C", list(FATLIQUOR_SPECS.keys()), index=4)
+    off3 = st.number_input("% Offer (C)", 0.0, 10.0, 0.0)
+
+    st.header("🏗️ 2. Drum Engineering")
     diameter = st.number_input("Drum Diameter (m)", 1.5, 5.0, 3.0)
     rpm = st.slider("Drum RPM", 2, 20, 12)
     weight = st.number_input("Weight of Goods (kg)", 100, 10000, 1000)
     
-    st.header("🌡️ 2. Thermal Control")
+    st.header("🌡️ 3. Thermal Control")
     temp_retan = st.slider("Retan Temp (°C)", 20, 45, 35)
     temp_fat = st.slider("Fatliquor Temp (°C)", 35, 65, 55)
     
-    st.header("📐 3. Substrate & Tanning")
+    st.header("📐 4. Substrate & Tanning")
     thick = st.number_input("Shaved Thickness (mm)", 0.5, 6.0, 1.6)
     ph = st.slider("Neutralization pH", 4.0, 8.0, 5.7)
     cr = st.slider("Chrome Offer (%)", 0.0, 8.0, 4.5)
     pickle = st.radio("Pickle Strategy", ["Equilibrium", "Chaser"])
 
-    st.header("🥣 4. Chemical Recipe")
-    fat_choice = st.selectbox("Oil Chemistry", list(FATLIQUOR_SPECS.keys()))
-    syn = st.slider("Syntan Offer (%)", 0.0, 15.0, 5.0)
-    nsa = st.slider("NSA Offer (%)", 0.0, 3.0, 0.5)
-    veg = st.selectbox("Veg Type", ["None", "Tara", "Mimosa", "Chestnut"])
-
-    st.header("💨 5. Environment")
-    is_wp = st.checkbox("Apply Waterproofing?", value=True)
+    st.header("💨 5. Environment & Drying")
+    is_wp = st.checkbox("Waterproofing?", value=True)
     dry_method = st.radio("Drying Method", ["Air Drying", "Partial Vacuum"])
     climate = st.radio("Climate Zone", ["Temperate", "Tropical"])
 
 # EXECUTE SIMULATION
 twin = PlatinumIndustrialTwin(thick, cr, ph)
-res = twin.simulate(fat_choice, syn, nsa, veg, pickle, dry_method, climate, rpm, diameter, weight, temp_retan, temp_fat, is_wp)
+res = twin.simulate(o1, off1, o2, off2, o3, off3, 5.0, 0.5, "None", pickle, dry_method, climate, rpm, diameter, weight, temp_retan, temp_fat, is_wp)
 
-# DASHBOARD
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Kinetic Oomph (kJ)", res['Oomph'], help="Total mechanical energy delivered to the load.")
-c2.metric("Core Penetration", f"{res['Pen']}%", help="Calculated saturation of the core center.")
-c3.metric("Surface Loading (VBI)", res['VBI'], help="Vapor Barrier Index: >1.8 indicates an emulsion crash.")
-c4.metric("Drying Complexity", res['Complexity'], help="Energy required to dry based on surface oil and climate.")
+if res:
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Kinetic Oomph (kJ)", res['Oomph'], help="Total mechanical energy delivered.")
+    c2.metric("Core Penetration", f"{res['Pen']}%")
+    c3.metric("Break Grade", f"G{res['Break']}")
+    c4.metric("Predicted Yield", f"{res['Yield']}%")
 
-st.divider()
+    st.divider()
 
-col_l, col_r = st.columns(2)
-with col_l:
-    st.subheader("🥁 Emulsion Stability Analysis")
-    
-    # DYNAMIC LOGIC: MATCHING THEORY TO RESULT
-    if res['Pen'] > 90:
-        st.success(f"✨ **Full Penetration (ø):** Process parameters successfully drove the {fat_choice} through the {thick}mm substance.")
-    elif res['Pen'] < 45:
-        st.error(f"🚨 **EMULSION CRASH:** Chemistry fixed too rapidly. The center of the {thick}mm substance is starving for lubricant.")
-    else:
-        st.warning(f"⚖️ **Saturation Warning:** Incomplete migration. The oil has stalled before reaching the center.")
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.subheader("🥁 Emulsion Analysis")
+        if res['Pen'] > 90:
+            st.success(f"✨ **Full Penetration:** Process parameters successfully drove the blend through {thick}mm.")
+        elif res['Pen'] < 45:
+            st.error(f"🚨 **EMULSION CRASH:** Chemistry fixed too rapidly.")
+        else:
+            st.warning(f"⚖️ **Saturation Warning:** Incomplete migration.")
 
-    st.info(f"**Chemical Property:** {res['Oil_Note']}")
-    st.write(f"**Electrical Drag (Zeta):** {res['Zeta']} mV")
-    st.write(f"**Peripheral Velocity:** {res['Velocity']} m/s")
+        st.info(f"**Primary Oil Note:** {res['Oil_Note']}")
+        st.write(f"**Total Offer:** {off1+off2+off3}% w/w")
+        st.write(f"**Electrical Drag (Zeta):** {res['Zeta']} mV")
+        st.write(f"**Peripheral Velocity:** {res['Velocity']} m/s")
 
-with col_r:
-    st.subheader("🌡️ Fixation & Break Analysis")
-    st.metric("Predicted Area Yield", f"{res['Yield']}%")
-    st.write(f"**Drying Profile:** {res['Fixation_Desc']}")
-    
-    if res['Fixation'] > 1.6:
-        st.error(f"⚠️ **RAPID FIXATION RISK:** Fixation rate ({res['Fixation']}) is too aggressive. High risk of grain distension (Coarse Break).")
-    
-    if res['Complexity'] > 35 and climate == "Tropical":
-        st.error("🚨 **DRYING STALL:** High humidity + surface loading = stagnant evaporation.")
-    elif dry_method == "Partial Vacuum" and ph > 5.4:
-        st.warning("⚠️ **BLINDED GRAIN:** Vacuum heat is ironing un-fixed oil into the pores.")
-    else:
-        st.success("💨 **Open Path:** Fixation is internal; moisture transmission is optimal.")
+    with col_r:
+        st.subheader("🌡️ Fixation & Drying")
+        st.metric("Vapor Barrier (VBI)", res['VBI'])
+        st.write(f"**Drying Profile:** {res['Fix_Desc']}")
+        
+        if res['Fixation'] > 2.0:
+            st.error(f"⚠️ **FIXATION ALERT:** Fixation rate ({res['Fixation']}) is too aggressive. Risk of coarse break.")
+        
+        if res['Complexity'] > 35 and climate == "Tropical":
+            st.error("🚨 **DRYING STALL:** High humidity + surface loading = stagnant evaporation.")
+        else:
+            st.success("💨 **Open Path:** Moisture transmission is optimal.")
 
-st.caption(f"v8.7 Platinum Build | IULTCS Technical Toolkit | Models: Covington (Link-Lock) & Zhang (Saturation)")
+st.caption("v9.5 Platinum Build | Full Industrial Physics Engine | IULTCS Technical Toolkit")
