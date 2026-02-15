@@ -33,12 +33,12 @@ class PlatinumIndustrialTwin:
         # 1. DRUM PHYSICS & MECHANICAL ENERGY
         drum_vol = math.pi * ((diam/2)**2) * width
         fill_pct = ((load_kg / 1000) / drum_vol) * 100
+        # Fall efficiency peaks at 30-45% fill
         fall_efficiency = math.sin(math.radians(max(5, min(175, (fill_pct/100)*180))))
         
         v_periph = (math.pi * diam * rpm) / 60
         furn_mod = {"None": 0.45, "Pegs": 1.15, "Hybrid": 1.55}.get(furniture, 1.15)
         
-        # Mech Punch: Force driving oil into fiber
         mech_punch = (v_periph * fall_efficiency * furn_mod * (duration / 45)) / (self.thick + 0.5)
         kinetic_oomph = (load_kg * 9.81 * (diam * 0.7) * fall_efficiency * (rpm * duration)) / 1000
         
@@ -57,7 +57,7 @@ class PlatinumIndustrialTwin:
         soup_masking = (syn * 16.0) + (nsa * 48.0) + VEG_SPECS[veg]['zeta']
         eff_zeta = (base_charge * surface_drag) - soup_masking
         
-        # 3. KINETIC PENETRATION (Strike Through)
+        # 3. KINETIC PENETRATION
         oil_mobility = 1.0 + ((temp_fat - 35) / 55.0)
         fixation_rate = 1.0 + (max(0, temp_fat - temp_retan) * 0.07)
         
@@ -65,7 +65,7 @@ class PlatinumIndustrialTwin:
         diff_res = (self.thick ** 2.70) * (1 + core_barrier) * case_hard * fixation_rate
         pen_score = 100 / (1 + ((eff_zeta * 0.042 * diff_res) / (mix_pen_base * mech_punch * oil_mobility + 0.1)))
         
-        # 4. QUALITY INDICATORS (Spue & Adhesion)
+        # 4. QUALITY INDICATORS
         avg_cloud = ((FATLIQUOR_SPECS[o1]['cloud_point']*off1) + (FATLIQUOR_SPECS[o2]['cloud_point']*off2) + (FATLIQUOR_SPECS[o3]['cloud_point']*off3)) / total_oil
         spue_f = ((FATLIQUOR_SPECS[o1]['spue_f']*off1) + (FATLIQUOR_SPECS[o2]['spue_f']*off2) + (FATLIQUOR_SPECS[o3]['spue_f']*off3)) / total_oil
         grease_drag = ((FATLIQUOR_SPECS[o1]['grease_drag']*off1) + (FATLIQUOR_SPECS[o2]['grease_drag']*off2) + (FATLIQUOR_SPECS[o3]['grease_drag']*off3)) / total_oil
@@ -74,14 +74,14 @@ class PlatinumIndustrialTwin:
         spue_idx = (spue_f * total_oil * ph_stress * climate_impact) / (pen_score / 20)
         adhesion_idx = 100 - (spue_idx * 15) - (grease_drag * 12)
         
-        # 5. AREA YIELD (Cold Vacuum & Bracing)
+        # 5. AREA YIELD (Fixed VEG_SPECS call)
         swelling = max(0, (self.ph - 4.2) * 2.45)
-        veg_gain = (veg_off * VE_SPECS[veg]['fill']) * 0.28 if veg != "None" else 0
+        veg_gain = (veg_off * VEG_SPECS[veg]['fill']) * 0.28 if veg != "None" else 0
         astringency_hit = (veg_off * VEG_SPECS[veg]['astringency']) * 0.18 if self.ph < 5.0 else 0
         
         if dry_method == "Air Drying":
             yield_loss = self.thick * 0.45 * (1.7 if climate == "Tropical" else 1.0)
-        else: # Vacuum logic
+        else:
             temp_strict = (vac_temp - 25) / 35.0
             brace = 1 - (veg_off * 0.04)
             yield_loss = (self.thick * 2.5 * (1 + temp_strict) * (1 + self.cr_offer*0.20) * brace) + 2.6
@@ -96,9 +96,9 @@ class PlatinumIndustrialTwin:
             "Cloud": round(avg_cloud, 1), "Oomph": round(kinetic_oomph, 2), "Zeta": round(eff_zeta, 1)
         }
 
-# --- STREAMLIT UI: THE CONTROL TOWER ---
-st.set_page_config(page_title="Platinum Master Twin v12.3", layout="wide")
-st.title("🛡️ Platinum Wet-End Digital Twin (v12.3)")
+# --- STREAMLIT UI ---
+st.set_page_config(page_title="Platinum Master Twin v12.4", layout="wide")
+st.title("🛡️ Platinum Wet-End Digital Twin (v12.4)")
 
 with st.sidebar:
     st.header("🥁 1. Drum & Load Geometry")
