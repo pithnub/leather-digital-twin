@@ -33,6 +33,7 @@ class PlatinumIndustrialTwin:
         # 1. DRUM VOLUME & FALL PHYSICS
         drum_vol = math.pi * ((diam/2)**2) * width
         fill_pct = ((load_kg / 1000) / drum_vol) * 100
+        # Fall efficiency peaks at 30-45% fill; falls off as drum crowds
         fall_eff = math.sin(math.radians(max(5, min(175, (fill_pct/100)*180))))
         v_periph = (math.pi * diam * rpm) / 60
         furn_mod = {"None": 0.45, "Pegs": 1.15, "Hybrid": 1.55}.get(furniture, 1.15)
@@ -40,9 +41,11 @@ class PlatinumIndustrialTwin:
         # 2. MECHANICAL & THERMAL ENERGY
         mech_punch = (v_periph * fall_eff * furn_mod * (duration / 45)) / (self.thick + 0.5)
         kinetic_oomph = (load_kg * 9.81 * (diam * 0.7) * fall_eff * (rpm * duration)) / 1000
-        temp_jump = max(0, temp_fat - temp_retan)
-        fixation_shock = 1.0 + (temp_jump * 0.08)
-        oil_mobility = 1.0 + ((temp_fat - 35) / 55.0)
+        
+        # Thermal Jump calculation (Abs delta for exhaustion shock)
+        temp_jump = abs(temp_fat - temp_retan)
+        fixation_shock = 1.0 + (temp_jump * 0.085)
+        oil_mobility = 1.0 + ((temp_fat - 35) / 60.0)
 
         # 3. CHEMICAL BARRIERS & IONIC DRAG
         if pickle_type == "Chaser (Core Heavy)":
@@ -60,14 +63,25 @@ class PlatinumIndustrialTwin:
         eff_zeta = (base_charge * surface_drag) - soup_masking
         
         # 4. KINETIC PENETRATION (CORE STRIKE)
-        mix_pen_base = ((FATLIQUOR_SPECS[o1]['pen']*off1) + (FATLIQUOR_SPECS[o2]['pen']*off2) + (FATLIQUOR_SPECS[o3]['pen']*off3)) / total_oil
+        mix_pen_base = ((FATLIQUOR_SPECS[o1]['pen']*off1) + 
+                        (FATLIQUOR_SPECS[o2]['pen']*off2) + 
+                        (FATLIQUOR_SPECS[o3]['pen']*off3)) / total_oil
+        
         diff_res = (self.thick ** 2.70) * (1 + core_barrier) * case_hard * fixation_shock
         pen_score = 100 / (1 + ((eff_zeta * 0.042 * diff_res) / (mix_pen_base * mech_punch * oil_mobility + 0.1)))
         
         # 5. QUALITY INDICATORS (SPUE & ADHESION)
-        avg_cloud = ((FATLIQUOR_SPECS[o1]['cloud_point']*off1) + (FATLIQUOR_SPECS[o2]['cloud_point']*off2) + (FATLIQUOR_SPECS[o3]['cloud_point']*off3)) / total_oil
-        spue_f = ((FATLIQUOR_SPECS[o1]['spue_f']*off1) + (FATLIQUOR_SPECS[o2]['spue_f']*off2) + (FATLIQUOR_SPECS[o3]['spue_f']*off3)) / total_oil
-        grease_drag = ((FATLIQUOR_SPECS[o1]['grease_drag']*off1) + (FATLIQUOR_SPECS[o2]['grease_drag']*off2) + (FATLIQUOR_SPECS[o3]['grease_drag']*off3)) / total_oil
+        avg_cloud = ((FATLIQUOR_SPECS[o1]['cloud_point']*off1) + 
+                     (FATLIQUOR_SPECS[o2]['cloud_point']*off2) + 
+                     (FATLIQUOR_SPECS[o3]['cloud_point']*off3)) / total_oil
+        
+        spue_f = ((FATLIQUOR_SPECS[o1]['spue_f']*off1) + 
+                  (FATLIQUOR_SPECS[o2]['spue_f']*off2) + 
+                  (FATLIQUOR_SPECS[o3]['spue_f']*off3)) / total_oil
+        
+        grease_drag = ((FATLIQUOR_SPECS[o1]['grease_drag']*off1) + 
+                       (FATLIQUOR_SPECS[o2]['grease_drag']*off2) + 
+                       (FATLIQUOR_SPECS[o3]['grease_drag']*off3)) / total_oil
         
         climate_impact = 1.8 if climate == "Tropical" else 1.2
         spue_idx = (spue_f * total_oil * ph_stress * climate_impact) / (pen_score / 20)
@@ -81,7 +95,7 @@ class PlatinumIndustrialTwin:
         
         if dry_method == "Air Drying":
             yield_loss = self.thick * 0.45 * (1.7 if climate == "Tropical" else 1.0)
-        else: # Vacuum
+        else: # Vacuum logic
             temp_strict = (vac_temp - 25) / 35.0
             brace = 1 - (veg_off * 0.04)
             yield_loss = (self.thick * 2.5 * (1 + temp_strict) * (1 + self.cr_offer*0.20) * brace) + 2.6
@@ -94,24 +108,24 @@ class PlatinumIndustrialTwin:
             "Punch": round(mech_punch, 2), "Fill": round(fill_pct, 1), "Fall": round(fall_eff * 100, 1),
             "Break": round(max(1, min(5, 5.6 - (pen_score/17) + (ph_stress*0.55))), 1),
             "Cloud": round(avg_cloud, 1), "Oomph": round(kinetic_oomph, 2), "Zeta": round(eff_zeta, 1),
-            "Jump": temp_jump, "VBI": round(vbi, 2)
+            "Jump": round(temp_jump, 1), "VBI": round(vbi, 2)
         }
 
 # --- STREAMLIT UI ---
-st.set_page_config(page_title="Platinum Master Twin v12.6", layout="wide")
-st.title("🛡️ Platinum Wet-End Digital Twin (v12.6)")
+st.set_page_config(page_title="Platinum Master Twin v12.8", layout="wide")
+st.title("🛡️ Platinum Wet-End Digital Twin (v12.8)")
 
 with st.sidebar:
     st.header("🥁 1. Drum & Load")
     diam = st.slider("Diameter (m)", 1.5, 4.5, 3.5)
     width = st.slider("Width (m)", 1.0, 4.0, 3.0)
-    load_kg = st.number_input("Load (kg)", 500, 12000, 3000)
+    load_kg = st.number_input("Load Weight (kg)", 500, 12000, 3000)
     rpm = st.slider("RPM", 2, 20, 12)
-    furniture = st.selectbox("Internal Furniture", ["None", "Pegs", "Hybrid"], index=2)
+    furniture = st.selectbox("Furniture", ["None", "Pegs", "Hybrid"], index=2)
 
-    st.header("🌡️ 2. Thermal Conditions")
-    temp_fat = st.slider("Fatliquor Temp (°C)", 35, 65, 60)
-    temp_retan = st.slider("Hide Internal Temp (°C)", 20, 50, 35)
+    st.header("🌡️ 2. Thermal Transition")
+    temp_retan = st.slider("Retanning Temp (°C)", 20, 60, 35)
+    temp_fat = st.slider("Fatliquor Temp (°C)", 35, 65, 55)
 
     st.header("🥣 3. Triple-Oil Recipe")
     o1 = st.selectbox("Oil A", list(FATLIQUOR_SPECS.keys()), index=1)
@@ -151,10 +165,10 @@ if res:
     with col_l:
         st.subheader("📍 Internal Anatomical Scan")
         oil_grad = [1.0, 0.85, 0.4*(res['Pen']/100), 0.85, 1.0]
-        st.area_chart(pd.DataFrame({'Layer': ['Grain', 'Upper Corium', 'Core', 'Lower Corium', 'Flesh'], 'Oil Dist': oil_grad}).set_index('Layer'))
+        st.area_chart(pd.DataFrame({'Layer': ['Grain', 'Upper Corium', 'Core', 'Lower Corium', 'Flesh'], 'Oil Profile': oil_grad}).set_index('Layer'))
     with col_r:
         st.subheader("📉 Technical Verdict")
-        if res['Jump'] > 20: st.error(f"🚨 **THERMAL SHOCK:** {res['Jump']}°C delta is crashing oil on the grain.")
-        if res['Fill'] > 65: st.warning(f"⚠️ **OVERLOAD:** Drum fill ({res['Fill']}%) is killing mechanical punch.")
+        if res['Jump'] > 15: st.error(f"🚨 **THERMAL SHOCK:** {res['Jump']}°C delta is crashing oil too fast.")
+        if res['Fill'] > 65: st.warning(f"⚠️ **OVERLOAD:** Drum fill ({res['Fill']}%) prevents the 'fall' punch.")
         st.write(f"**VBI:** {res['VBI']} | **Zeta Potential:** {res['Zeta']}")
         st.write(f"**Mechanical Work:** {res['Oomph']} kJ | **Fall Eff:** {res['Fall']}%")
